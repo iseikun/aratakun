@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="ja" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ブラック企業社長シミュレーター // React & Next.js Edition</title>
+  <!-- React 18 & ReactDOM & Babel CDN -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            cyber: {
+              neonCyan: '#00f0ff',
+              neonPink: '#ff007f',
+              neonGreen: '#00ff66',
+              neonAmber: '#ffb703',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      background: radial-gradient(circle at 50% 20%, rgb(18, 25, 48) 0%, rgb(5, 8, 17) 100%);
+      min-height: 100vh;
+      color: #f1f5f9;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    .cyber-grid {
+      background-size: 40px 40px;
+      background-image: 
+        linear-gradient(to right, rgba(239, 68, 68, 0.05) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(239, 68, 68, 0.05) 1px, transparent 1px);
+    }
+    /* スキャンライン */
+    .scanlines {
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
+      background-size: 100% 4px;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body class="cyber-grid relative selection:bg-red-500 selection:text-white">
+  <div class="fixed inset-0 scanlines z-50 pointer-events-none opacity-30"></div>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // Web Audio API によるプロシージャル効果音
+    class SoundEngine {
+      constructor() {
+        this.ctx = null;
+      }
+      init() {
+        if (!this.ctx) {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          this.ctx = new AudioCtx();
+        }
+        if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+      }
+      playTyping() {
+        this.init();
+        if (!this.ctx) return;
+        for (let i = 0; i < 4; i++) {
+          const now = this.ctx.currentTime + i * 0.04;
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(800 + Math.random() * 400, now);
+          gain.gain.setValueAtTime(0.06, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.03);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.04);
+        }
+      }
+      playCash() {
+        this.init();
+        if (!this.ctx) return;
+        const notes = [987.77, 1318.51, 1567.98];
+        notes.forEach((freq, i) => {
+          const now = this.ctx.currentTime + i * 0.08;
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, now);
+          gain.gain.setValueAtTime(0.15, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.22);
+        });
+      }
+      playShout() {
+        this.init();
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(160, now);
+        osc.frequency.exponentialRampToValueAtTime(40, now + 0.3);
+        gain.gain.setValueAtTime(0.35, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.36);
+      }
+      playEnergy() {
+        this.init();
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(400, now);
+        osc.frequency.exponentialRampToValueAtTime(1200, now + 0.15);
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.16);
+      }
+      playSiren() {
+        this.init();
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(600, now);
+        osc.frequency.linearRampToValueAtTime(950, now + 0.25);
+        osc.frequency.linearRampToValueAtTime(600, now + 0.5);
+        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.52);
+      }
+    }
+    const sound = new SoundEngine();
+
+    // メインコンポーネント
+    function App() {
+      // 画面状態: 'title' | 'game'
+      const [screen, setScreen] = useState('title');
+      const [companyName, setCompanyName] = useState('株式会社アットホーム・デスマ');
+
+      // 会社ステート
+      const [cash, setCash] = useState(2500000);
+      const [day, setDay] = useState(1);
+      const [ap, setAp] = useState(4);
+      const [maxAp, setMaxAp] = useState(4);
+      const [laborRisk, setLaborRisk] = useState(15);
+      const [blackLevel, setBlackLevel] = useState(1);
+      const ipoTarget = 10000000;
+
+      // 社員一覧
+      const [employees, setEmployees] = useState([
+        { id: 1, name: '佐藤 限界', role: 'Frontend (React)', stamina: 85, maxStamina: 100, mental: 75, maxMental: 100, productivity: 15, salary: 180000, isOvertime: false, color: 'from-blue-600 to-cyan-500' },
+        { id: 2, name: '鈴木 魔剤', role: 'Backend (Node.js)', stamina: 90, maxStamina: 100, mental: 60, maxMental: 100, productivity: 18, salary: 200000, isOvertime: false, color: 'from-emerald-600 to-teal-500' },
+        { id: 3, name: '田中 徹夜', role: 'Fullstack', stamina: 95, maxStamina: 100, mental: 50, maxMental: 100, productivity: 24, salary: 220000, isOvertime: false, color: 'from-purple-600 to-indigo-500' },
+        { id: 4, name: '渡辺 ピュア', role: 'Intern (無給)', stamina: 100, maxStamina: 100, mental: 90, maxMental: 100, productivity: 10, salary: 30000, isOvertime: false, color: 'from-amber-500 to-orange-500' },
+      ]);
+
+      // 案件一覧
+      const [projects, setProjects] = useState([
+        { id: 101, title: '予算10万の官公庁AI基幹システム全面刷新', client: '孫請けSIer', reward: 900000, requiredProgress: 100, currentProgress: 20, daysRemaining: 4, isFlaming: true },
+        { id: 102, title: '明日朝までに仕様が3回変わるECサイト', client: 'ワンマンアパレル', reward: 1400000, requiredProgress: 150, currentProgress: 0, daysRemaining: 3, isFlaming: true },
+        { id: 103, title: 'バグだらけのWeb3マッチングアプリ緊急保守', client: 'クリプト企業', reward: 700000, requiredProgress: 80, currentProgress: 40, daysRemaining: 2, isFlaming: false },
+      ]);
+
+      // 社内Slackログ
+      const [logs, setLogs] = useState([
+        { id: 1, sender: '代表取締役社長', role: 'CEO', text: '「全社員へ。本日より限界突破を義務付けます。残業代は夢の代金です」', type: 'system', time: '09:00' }
+      ]);
+
+      const [alertModal, setAlertModal] = useState(null);
+      const [isIpo, setIsIpo] = useState(false);
+
+      const addLog = (sender, role, text, type = 'slack') => {
+        const time = `${String(Math.floor(Math.random() * 12) + 12).padStart(2, '0')}:${String(Math.floor(Math.random() * 60)).padStart(2, '0')}`;
+        setLogs(prev => [...prev, { id: Date.now() + Math.random(), sender, role, text, type, time }]);
+      };
+
+      // 社長コマンド実行
+      const executeCommand = (type) => {
+        if (ap < 1) return;
+        sound.playCash();
+        setAp(a => a - 1);
+        setBlackLevel(b => b + 1);
+
+        if (type === 'falsify') {
+          // Server Action: タイムカード改ざん
+          const cut = Math.floor(Math.random() * 25) + 20;
+          setLaborRisk(r => Math.max(0, r - cut));
+          addLog('総務(裏)', 'Server Action', `[RSC] サーバー側のcronログを直接改ざん！全員定時退社として偽装（警戒度 -${cut}%）`, 'system');
+        } else if (type === 'allnighter') {
+          // Suspense: 徹夜デスマ
+          sound.playTyping();
+          setProjects(prev => prev.map(p => ({ ...p, currentProgress: p.currentProgress + 60 })));
+          setEmployees(prev => prev.map(e => ({ ...e, stamina: Math.max(10, e.stamina - 25), mental: Math.max(10, e.mental - 20) })));
+          addLog('社長', 'CEO', '「全員朝までストリーミング作業！寝ることは許可しない！」', 'alert');
+        } else if (type === 'aircon') {
+          // useMemo: エアコン停止
+          setCash(c => c + 60000);
+          setEmployees(prev => prev.map(e => ({ ...e, mental: Math.max(0, e.mental - 15) })));
+          addLog('総務', 'Notice', '【経費削減】オフィスの冷暖房を全停止。現金を6万円節約しました。', 'system');
+        } else if (type === 'nomikai') {
+          // useEffect: 強制飲み会
+          setEmployees(prev => prev.map(e => ({ ...e, stamina: Math.max(10, e.stamina - 20) })));
+          addLog('社長', 'CEO', '「今日は社長のおごりで居酒屋行くぞ！（※割り勘）全員参加な！」', 'alert');
+        } else if (type === 'intern') {
+          // createPortal: インターン召喚
+          const names = ['高橋 従順', '伊藤 絶望', '小林 逃亡予備軍'];
+          const n = names[Math.floor(Math.random() * names.length)];
+          const newEmp = { id: Date.now(), name: n, role: 'Intern (無給)', stamina: 100, maxStamina: 100, mental: 85, maxMental: 100, productivity: 12, salary: 20000, isOvertime: false, color: 'from-amber-600 to-rose-500' };
+          setEmployees(prev => [...prev, newEmp]);
+          addLog(n, 'Intern', '「初めまして！業界を学びたくて無給で参りました！」');
+        }
+      };
+
+      // 社員激詰め
+      const scold = (id) => {
+        sound.playShout();
+        setEmployees(prev => prev.map(e => e.id === id ? { ...e, mental: Math.max(0, e.mental - 15) } : e));
+        setProjects(prev => {
+          if (prev.length === 0) return prev;
+          const next = [...prev];
+          next[0].currentProgress += 20;
+          return next;
+        });
+        const emp = employees.find(e => e.id === id);
+        addLog('社長', 'CEO', `「おい${emp?.name}！手が止まってるぞ！死ぬ気で働け！！」`, 'alert');
+        setBlackLevel(b => b + 1);
+      };
+
+      // エナドリ投与
+      const giveDrink = (id) => {
+        if (cash < 3000) return;
+        sound.playEnergy();
+        setCash(c => c - 3000);
+        setEmployees(prev => prev.map(e => e.id === id ? { ...e, stamina: Math.min(e.maxStamina, e.stamina + 40), mental: Math.max(0, e.mental - 10) } : e));
+        const emp = employees.find(e => e.id === id);
+        addLog(emp?.name, emp?.role, '「魔剤2本一気飲みしました！心臓バクバクですが動けます！」');
+      };
+
+      // 残業トグル
+      const toggleOvertime = (id) => {
+        sound.playTyping();
+        setEmployees(prev => prev.map(e => {
+          if (e.id === id) {
+            const nextOt = !e.isOvertime;
+            addLog(e.name, e.role, nextOt ? '「残業命令が出ました…今夜も徹夜確定です」' : '「定時退社許可出た…！？罠じゃないよね？」');
+            return { ...e, isOvertime: nextOt };
+          }
+          return e;
+        }));
+      };
+
+      // 納品
+      const deliver = (proj) => {
+        sound.playCash();
+        const nextCash = cash + proj.reward;
+        setCash(nextCash);
+        addLog('経理', 'Finance', `[入金完了] クライアントから ¥${proj.reward.toLocaleString()} が着金しました！`, 'system');
+        setProjects(prev => prev.filter(p => p.id !== proj.id));
+        if (nextCash >= ipoTarget) {
+          setIsIpo(true);
+        }
+      };
+
+      // 翌日へ進む
+      const nextDay = () => {
+        sound.playTyping();
+        let nextRisk = laborRisk;
+        let nextCash = cash;
+
+        // 社員稼働
+        const nextEmps = employees.map(e => {
+          if (e.mental <= 0) {
+            addLog('退職代行', 'Legal', `【通知】${e.name}様より退職代行の委任通知書が届きました。本日付で退職となります。`, 'alert');
+            return null;
+          }
+          if (e.isOvertime) nextRisk += 5;
+          const lossStamina = e.isOvertime ? 25 : 12;
+          const lossMental = e.isOvertime ? 18 : 8;
+          return {
+            ...e,
+            stamina: Math.max(0, e.stamina - lossStamina),
+            mental: Math.max(0, e.mental - lossMental),
+          };
+        }).filter(Boolean);
+
+        setEmployees(nextEmps);
+
+        // 案件自動進捗
+        setProjects(prev => prev.map(p => {
+          const added = nextEmps.length * 15;
+          const days = p.daysRemaining - 1;
+          if (days < 0 && p.currentProgress < p.requiredProgress) {
+            nextCash -= 250000;
+            addLog('クライアント', 'Client', `『${p.title}』の納期が過ぎています！違約金25万円請求します！！`, 'alert');
+          }
+          return { ...p, currentProgress: p.currentProgress + added, daysRemaining: Math.max(0, days) };
+        }));
+
+        // 労基署監査
+        if (nextRisk >= 50 && Math.random() * 100 < nextRisk) {
+          sound.playSiren();
+          nextCash -= 800000;
+          nextRisk = 10;
+          setAlertModal('【緊急家宅捜索】労働基準監督署が抜き打ち監査！違法残業が発覚し、罰金80万円が科されました！');
+        }
+
+        setCash(nextCash);
+        setLaborRisk(Math.min(100, Math.max(0, nextRisk)));
+        setDay(d => d + 1);
+        setAp(maxAp);
+      };
+
+      // タイトル画面
+      if (screen === 'title') {
+        return (
+          <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center max-w-4xl mx-auto">
+            <div className="inline-block px-4 py-1 rounded-full bg-red-950/80 border border-red-500 text-red-400 text-xs font-bold tracking-widest uppercase mb-4 animate-pulse">
+              BLACK CORP PRESIDENT SIMULATOR
+            </div>
+            <h1 className="text-4xl sm:text-6xl font-black tracking-tight text-white mb-4">
+              ブラック企業<br />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-500 via-amber-400 to-yellow-500">
+                社長シミュレーター
+              </span>
+            </h1>
+            <p className="text-sm text-slate-400 max-w-lg mx-auto mb-8 leading-relaxed">
+              ReactのHooksで社員を酷使し、Next.jsのServer Actionsでタイムカードを改ざん！
+              労基署の査察をすり抜けて、会社資産1,000万円で東証グロースへ上場逃げ切りを目指せ！
+            </p>
+
+            <div className="w-full max-w-md bg-slate-900/90 border-2 border-red-900 rounded-2xl p-6 shadow-2xl space-y-4 mb-8">
+              <label className="block text-xs text-left text-slate-400 font-bold">設立する会社名:</label>
+              <input
+                type="text"
+                value={companyName}
+                onChange={e => setCompanyName(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-700 text-white px-4 py-2.5 rounded-xl font-bold focus:outline-none focus:border-red-500"
+              />
+              <button
+                onClick={() => { sound.playCash(); setScreen('game'); }}
+                className="w-full py-4 rounded-xl bg-gradient-to-r from-red-600 to-amber-600 hover:from-red-500 text-white font-black text-base shadow-lg transition-all cursor-pointer hover:scale-105"
+              >
+                代表取締役社長に就任（ゲーム開始）
+              </button>
+            </div>
+          </div>
+        );
+      }
+
+      // ゲーム本編画面
+      const ipoPercent = Math.min(100, Math.max(0, (cash / ipoTarget) * 100));
+
+      return (
+        <div className="max-w-7xl mx-auto p-4 sm:p-8 space-y-6">
+          {/* ナビバー */}
+          <div className="flex justify-between items-center">
+            <button onClick={() => setScreen('title')} className="text-xs px-3 py-1.5 rounded-lg border border-slate-700 text-slate-400 hover:text-white">
+              ← 社長辞任（タイトルへ）
+            </button>
+            <button onClick={nextDay} className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-amber-600 hover:from-red-500 text-white font-black text-sm shadow-lg transition-all hover:scale-105 cursor-pointer">
+              翌朝へ進む (DAY {day + 1}) →
+            </button>
+          </div>
+
+          {/* 会社ステータス HUD */}
+          <div className="bg-slate-900/95 border-2 border-red-950 rounded-2xl p-5 shadow-2xl">
+            <div className="flex flex-wrap justify-between items-center gap-3 border-b border-slate-800 pb-3 mb-4">
+              <div>
+                <h2 className="text-xl font-black text-white flex items-center gap-2">
+                  {companyName}
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-red-900/60 border border-red-500 text-red-300">
+                    ブラック度 Lv.{blackLevel}
+                  </span>
+                </h2>
+                <p className="text-xs text-slate-400">代表取締役社長 執務室 // 目標：東証グロースIPO上場</p>
+              </div>
+              <div className="flex items-center gap-4 text-xs">
+                <span className="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-cyan-400 font-bold">
+                  DAY {day}
+                </span>
+                <span className="px-3 py-1.5 rounded-lg bg-amber-950/60 border border-amber-500 text-amber-300 font-bold">
+                  社長気力: {ap} / {maxAp} AP
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {/* 資金 */}
+              <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 space-y-1">
+                <div className="flex justify-between text-xs text-slate-400">
+                  <span className="text-emerald-400 font-bold">会社資金 (CASH)</span>
+                  <span className="text-[10px]">目標: 1,000万円</span>
+                </div>
+                <div className="text-2xl font-black text-emerald-400">¥{cash.toLocaleString()}</div>
+                <div>
+                  <div className="flex justify-between text-[10px] text-slate-400 mb-0.5">
+                    <span>IPO上場進捗</span>
+                    <span className="font-bold text-white">{ipoPercent.toFixed(1)}%</span>
+                  </div>
+                  <div className="w-full h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
+                    <div className="h-full bg-gradient-to-r from-emerald-500 to-cyan-400 transition-all duration-300" style={{ width: `${ipoPercent}%` }}></div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 労基署警戒度 */}
+              <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 space-y-1">
+                <div className="flex justify-between text-xs text-slate-400">
+                  <span className="text-red-400 font-bold">労基署 警戒度 (AUDIT RISK)</span>
+                  <span className={`font-bold ${laborRisk >= 70 ? 'text-red-500 animate-pulse' : 'text-slate-300'}`}>{laborRisk}%</span>
+                </div>
+                <div className="w-full h-3 bg-slate-900 rounded-full overflow-hidden border border-slate-800 mt-2">
+                  <div className={`h-full transition-all duration-300 ${laborRisk >= 70 ? 'bg-red-600 animate-pulse' : laborRisk >= 40 ? 'bg-amber-500' : 'bg-emerald-500'}`} style={{ width: `${laborRisk}%` }}></div>
+                </div>
+                <p className="text-[10px] text-slate-500 pt-1">
+                  {laborRisk >= 70 ? '⚠️ 危険！抜き打ち家宅捜索が秒読みです！' : 'タイムカード改ざんで警戒度を下げられます。'}
+                </p>
+              </div>
+
+              {/* 稼働率 */}
+              <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 space-y-1 sm:col-span-2 lg:col-span-1">
+                <span className="text-xs text-amber-400 font-bold">社畜稼働情報</span>
+                <div className="text-xs text-slate-300 space-y-1 pt-1">
+                  <div className="flex justify-between"><span>在籍社員数:</span><span className="font-bold text-white">{employees.length}名</span></div>
+                  <div className="flex justify-between"><span>社内の空気:</span><span className="font-bold text-amber-300">{blackLevel > 15 ? '「洗脳完了」' : '「まだ転職サイトを見てる」'}</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* メインレイアウト */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+            {/* 左側: 社員デスク ＆ 案件ボード */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* 社員フロア */}
+              <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl">
+                <h3 className="text-sm font-bold text-white mb-4 border-b border-slate-800 pb-2">
+                  社員フロア監視カメラ ({employees.length}名)
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {employees.map(emp => (
+                    <div key={emp.id} className={`p-4 rounded-xl border-2 transition-all ${emp.isOvertime ? 'bg-slate-950 border-amber-500 shadow-[0_0_12px_rgba(245,158,11,0.2)]' : 'bg-slate-950/80 border-slate-800'}`}>
+                      <div className="flex justify-between items-start mb-2">
+                        <div>
+                          <div className="font-bold text-sm text-white">{emp.name}</div>
+                          <div className="text-xs text-cyan-400">{emp.role}</div>
+                        </div>
+                        {emp.isOvertime && <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 border border-amber-500 text-amber-300 animate-pulse">深夜残業中</span>}
+                      </div>
+
+                      {/* 体力 & メンタル */}
+                      <div className="space-y-1.5 mb-3 text-[11px]">
+                        <div>
+                          <div className="flex justify-between text-slate-400"><span>体力 (HP):</span><span>{emp.stamina} / {emp.maxStamina}</span></div>
+                          <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden"><div className="h-full bg-emerald-500" style={{ width: `${(emp.stamina/emp.maxStamina)*100}%` }}></div></div>
+                        </div>
+                        <div>
+                          <div className="flex justify-between text-slate-400"><span>メンタル:</span><span>{emp.mental} / {emp.maxMental}</span></div>
+                          <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden"><div className="h-full bg-purple-500" style={{ width: `${(emp.mental/emp.maxMental)*100}%` }}></div></div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-1.5 text-xs">
+                        <button onClick={() => toggleOvertime(emp.id)} className={`py-1 rounded border font-bold ${emp.isOvertime ? 'border-amber-500 bg-amber-500/20 text-amber-300' : 'border-slate-700 bg-slate-800 text-slate-300'}`}>
+                          {emp.isOvertime ? '定時帰宅' : '残業命令'}
+                        </button>
+                        <button onClick={() => scold(emp.id)} className="py-1 rounded border border-red-500/60 bg-red-950/40 text-red-300 font-bold hover:bg-red-900/60">
+                          激詰め！
+                        </button>
+                        <button onClick={() => giveDrink(emp.id)} className="py-1 rounded border border-cyan-500/60 bg-cyan-950/40 text-cyan-300 font-bold hover:bg-cyan-900/60">
+                          魔剤(¥3K)
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* デスマーチ案件ボード */}
+              <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-3">
+                <h3 className="text-sm font-bold text-white border-b border-slate-800 pb-2">
+                  デスマーチ案件ボード ({projects.length}件)
+                </h3>
+                {projects.map(p => {
+                  const percent = Math.min(100, Math.floor((p.currentProgress / p.requiredProgress) * 100));
+                  const isDone = p.currentProgress >= p.requiredProgress;
+                  return (
+                    <div key={p.id} className={`p-3.5 rounded-xl border ${isDone ? 'bg-emerald-950/30 border-emerald-500' : p.isFlaming ? 'bg-slate-950 border-red-500/80' : 'bg-slate-950/80 border-slate-800'}`}>
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="font-bold text-sm text-white">{p.title}</span>
+                        <span className="text-emerald-400 font-bold text-xs">¥{p.reward.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between text-xs text-slate-400 mb-1">
+                        <span>進捗: {p.currentProgress} / {p.requiredProgress} ({percent}%)</span>
+                        <span className={p.daysRemaining <= 1 ? 'text-red-400 font-bold' : ''}>納期: 残り{p.daysRemaining}日</span>
+                      </div>
+                      <div className="w-full h-2 bg-slate-900 rounded-full overflow-hidden mb-2">
+                        <div className="h-full bg-cyan-500" style={{ width: `${percent}%` }}></div>
+                      </div>
+                      {isDone && (
+                        <button onClick={() => deliver(p)} className="w-full py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs animate-pulse cursor-pointer">
+                          納品＆即時着金 (¥{p.reward.toLocaleString()})
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 右側: 社長React Hooksカード & Slack */}
+            <div className="space-y-6">
+              {/* Slack */}
+              <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl flex flex-col h-60">
+                <div className="text-xs font-bold text-cyan-400 border-b border-slate-800 pb-2 mb-2">#general-全社悲鳴チャンネル</div>
+                <div className="overflow-y-auto space-y-2 flex-1 pr-1 text-xs">
+                  {logs.slice().reverse().map(l => (
+                    <div key={l.id} className="p-2 rounded bg-slate-950/60 border border-slate-800/80">
+                      <div className="flex justify-between text-[10px] text-slate-500">
+                        <span className="font-bold text-white">{l.sender} ({l.role})</span>
+                        <span>{l.time}</span>
+                      </div>
+                      <div className={`mt-0.5 ${l.type === 'alert' ? 'text-red-400 font-bold' : 'text-slate-300'}`}>{l.text}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 社長コマンド */}
+              <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-2.5">
+                <h3 className="text-xs font-bold text-amber-400 border-b border-slate-800 pb-2">社長のReact Hooks経営コマンド</h3>
+                <button onClick={() => executeCommand('falsify')} disabled={ap < 1} className="w-full p-2.5 rounded-lg border border-slate-700 bg-slate-950 text-left hover:border-red-500 disabled:opacity-40 cursor-pointer">
+                  <div className="flex justify-between text-xs font-bold text-white mb-0.5">
+                    <span>Server Action: タイムカード改ざん</span>
+                    <span className="text-amber-400">1 AP</span>
+                  </div>
+                  <p className="text-[10px] text-slate-400">サーバー側で打刻DBを改ざん！労基署警戒度を大幅カット。</p>
+                </button>
+
+                <button onClick={() => executeCommand('allnighter')} disabled={ap < 1} className="w-full p-2.5 rounded-lg border border-slate-700 bg-slate-950 text-left hover:border-red-500 disabled:opacity-40 cursor-pointer">
+                  <div className="flex justify-between text-xs font-bold text-white mb-0.5">
+                    <span>Suspense: 徹夜デスマ・ストリーミング</span>
+                    <span className="text-amber-400">1 AP</span>
+                  </div>
+                  <p className="text-[10px] text-slate-400">全員朝まで作業！全案件の進捗を一気に+60進める。</p>
+                </button>
+
+                <button onClick={() => executeCommand('aircon')} disabled={ap < 1} className="w-full p-2.5 rounded-lg border border-slate-700 bg-slate-950 text-left hover:border-red-500 disabled:opacity-40 cursor-pointer">
+                  <div className="flex justify-between text-xs font-bold text-white mb-0.5">
+                    <span>useMemo: エアコン停止 (経費削減)</span>
+                    <span className="text-amber-400">1 AP</span>
+                  </div>
+                  <p className="text-[10px] text-slate-400">冷暖房をカットして即時6万円の現金を捻出する。</p>
+                </button>
+
+                <button onClick={() => executeCommand('intern')} disabled={ap < 1} className="w-full p-2.5 rounded-lg border border-slate-700 bg-slate-950 text-left hover:border-red-500 disabled:opacity-40 cursor-pointer">
+                  <div className="flex justify-between text-xs font-bold text-white mb-0.5">
+                    <span>createPortal: 無給インターン召喚</span>
+                    <span className="text-amber-400">1 AP</span>
+                  </div>
+                  <p className="text-[10px] text-slate-400">「学べる環境」を名目に無給の若者を即時補充する。</p>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* 監査アラートモーダル */}
+          {alertModal && (
+            <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+              <div className="bg-slate-950 border-2 border-red-600 rounded-2xl p-6 max-w-md w-full text-center space-y-4">
+                <h3 className="text-xl font-black text-red-500">労働基準監督署 家宅捜索</h3>
+                <p className="text-xs text-slate-300">{alertModal}</p>
+                <button onClick={() => setAlertModal(null)} className="w-full py-2.5 rounded-xl bg-red-600 text-white font-bold text-xs cursor-pointer">
+                  罰金を支払って業務再開
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* 祝・IPO上場モーダル */}
+          {isIpo && (
+            <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
+              <div className="bg-slate-950 border-2 border-emerald-400 rounded-2xl p-8 max-w-md w-full text-center space-y-4">
+                <h2 className="text-3xl font-black text-emerald-400">祝・東証グロースIPO達成！</h2>
+                <p className="text-xs text-slate-300">
+                  会社資金が1,000万円を突破！あなたは創業者株式を売却して10億円を手に入れ、南の島へ高飛びしました。おめでとうございます！
+                </p>
+                <button onClick={() => setScreen('title')} className="w-full py-3.5 rounded-xl bg-emerald-500 text-black font-black text-sm cursor-pointer">
+                  新会社を立ち上げる
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    ReactDOM.render(<App />, document.getElementById('root'));
+  </script>
+</body>
+</html>
